@@ -20,7 +20,9 @@ import { aiConfig, getConfig } from "./ai-config";
 
 // Mapping from number to last conversation id
 const conversations = {};
-
+console.log("pre prompt", process.env.PRE_PROMPT)
+console.log(process.env.PRE_PROMPT)
+// process.exit(0)
 const handleMessageGPT = async (message: Message, prompt: string) => {
 	try {
 		// Get last conversation
@@ -44,6 +46,9 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		let response: ChatMessage;
 		if (lastConversationId) {
 			// Handle message with previous conversation
+			// log prompt
+			cli.print(`[GPT] Continuing conversation with ${message.from} (ID: ${lastConversationId})`);
+			cli.print(`[GPT] Prompt: ${prompt}`);
 			response = await chatgpt.sendMessage(prompt, {
 				parentMessageId: lastConversationId
 			});
@@ -57,6 +62,9 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 			}
 
 			// Handle message with new conversation
+			// log prompt
+			cli.print(`[GPT] Starting new conversation with ${message.from}`);
+			cli.print(`[GPT] Prompt: ${prompt}`);
 			response = await chatgpt.sendMessage(promptBuilder);
 
 			cli.print(`[GPT] New conversation for ${message.from} (ID: ${response.id})`);
@@ -70,7 +78,7 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		cli.print(`[GPT] Answer to ${message.from}: ${response.text}  | OpenAI request took ${end}ms)`);
 
 		// TTS reply (Default: disabled)
-		if (getConfig("tts", "enabled")) {
+		if (getConfig("tts", "enabled") && message.type !== "chat") {
 			sendVoiceMessageReply(message, response.text);
 			message.reply(response.text);
 			return;
@@ -123,6 +131,7 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 
 	// Get audio buffer
 	cli.print(`${logTAG} Generating audio from GPT response "${gptTextResponse}"...`);
+	// console.log("message", message)
 	const audioBuffer = await ttsRequest();
 
 	// Check if audio buffer is valid

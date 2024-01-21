@@ -16,6 +16,7 @@ const enabled: ICommandDefinition = {
 	hint: "true, false",
 	data: config.ttsEnabled,
 	execute: function (message: Message, valueStr?: string) {
+		// console.log("message",message, valueStr)
 		if (["true", "false"].indexOf(valueStr || "") < 0) {
 			message.reply(`Invalid value, please specify true or false`);
 			return;

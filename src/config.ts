@@ -7,6 +7,7 @@ import { AWSPollyEngine } from "./types/aws-polly-engine";
 // Environment variables
 import dotenv from "dotenv";
 dotenv.config();
+dotenv.config({ path: "config.env" });
 
 // Config Interface
 interface IConfig {
@@ -55,6 +56,7 @@ interface IConfig {
 	transcriptionLanguage: string;
 }
 
+console.log("pre prompt:",  process.env.PRE_PROMPT)
 // Config
 export const config: IConfig = {
 	whitelistedPhoneNumbers: process.env.WHITELISTED_PHONE_NUMBERS?.split(",") || [],
