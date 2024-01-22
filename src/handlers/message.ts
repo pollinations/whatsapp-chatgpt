@@ -112,9 +112,9 @@ async function handleIncomingMessage(message: Message) {
 		cli.print(`[Transcription] Transcription response: ${transcribedText} (language: ${transcribedLanguage})`);
 
 		// Reply with transcription
-		const reply = `You said: ${transcribedText}${transcribedLanguage ? " (language: " + transcribedLanguage + ")" : ""}`;
-		message.reply(reply);
-
+		// const reply = `You said: ${transcribedText}${transcribedLanguage ? " (language: " + transcribedLanguage + ")" : ""}`;
+		// message.reply(reply);
+		// console.log("messsage replied", message);
 		// Handle message GPT
 		await handleMessageGPT(message, transcribedText);
 		return;

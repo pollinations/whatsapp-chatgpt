@@ -12,6 +12,8 @@ import { ChatMessage } from "chatgpt";
 // TTS
 import { ttsRequest as speechTTSRequest } from "../providers/speech";
 import { ttsRequest as awsTTSRequest } from "../providers/aws";
+import { ttsRequest as elevenlabsTTSRequest } from "../providers/elevenlabs";
+
 import { TTSMode } from "../types/tts-mode";
 
 // Moderation
@@ -80,7 +82,7 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		// TTS reply (Default: disabled)
 		if (getConfig("tts", "enabled") && message.type !== "chat") {
 			sendVoiceMessageReply(message, response.text);
-			message.reply(response.text);
+			// message.reply(response.text);
 			return;
 		}
 
@@ -120,7 +122,12 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 				return await awsTTSRequest(gptTextResponse);
 			};
 			break;
-
+		case TTSMode.ElevenLabs:
+			logTAG = "[ElevenLabs]";
+			ttsRequest = async function (): Promise<Buffer | null> {
+				return await elevenlabsTTSRequest(gptTextResponse);
+			};
+			break;
 		default:
 			logTAG = "[SpeechAPI]";
 			ttsRequest = async function (): Promise<Buffer | null> {
