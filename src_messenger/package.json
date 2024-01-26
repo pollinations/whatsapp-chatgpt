@@ -8,5 +8,9 @@
   },
   "author": "",
   "license": "ISC",
-  "type":"module"
+  "type": "module",
+  "dependencies": {
+    "openai": "^4.25.0",
+    "ramda": "^0.29.1"
+  }
 }
