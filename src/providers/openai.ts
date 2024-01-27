@@ -18,11 +18,13 @@ export let openai: OpenAIApi;
 export function initOpenAI() {
 	chatgpt = new ChatGPTAPI({
 		apiKey: getConfig("gpt", "apiKey"),
+		debug: true,
+		systemMessage: process.env["SYSTEM_PROMPT"],
 		completionParams: {
 			model: config.openAIModel,
 			temperature: 0.7,
 			top_p: 0.9,
-			max_tokens: getConfig("gpt", "maxModelTokens")
+			max_tokens: getConfig("gpt", "maxModelTokens"),
 		}
 	});
 

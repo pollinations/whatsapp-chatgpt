@@ -26,6 +26,7 @@ console.log("pre prompt", process.env.PRE_PROMPT)
 console.log(process.env.PRE_PROMPT)
 // process.exit(0)
 const handleMessageGPT = async (message: Message, prompt: string) => {
+	console.log("message", message["_data"]);
 	try {
 		// Get last conversation
 		const lastConversationId = conversations[message.from];
@@ -52,7 +53,8 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 			cli.print(`[GPT] Continuing conversation with ${message.from} (ID: ${lastConversationId})`);
 			cli.print(`[GPT] Prompt: ${prompt}`);
 			response = await chatgpt.sendMessage(prompt, {
-				parentMessageId: lastConversationId
+				parentMessageId: lastConversationId,
+				name: sanitizeName(message["_data"]?.notifyName),
 			});
 		} else {
 			let promptBuilder = "";
@@ -60,14 +62,16 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 			// Pre prompt
 			if (config.prePrompt != null && config.prePrompt.trim() != "") {
 				promptBuilder += config.prePrompt + "\n\n";
-				promptBuilder += prompt + "\n\n";
 			}
+			promptBuilder += prompt + "\n\n";
 
 			// Handle message with new conversation
 			// log prompt
 			cli.print(`[GPT] Starting new conversation with ${message.from}`);
 			cli.print(`[GPT] Prompt: ${prompt}`);
-			response = await chatgpt.sendMessage(promptBuilder);
+			response = await chatgpt.sendMessage(promptBuilder,{
+				name: sanitizeName(message["_data"]?.notifyName),
+			});
 
 			cli.print(`[GPT] New conversation for ${message.from} (ID: ${response.id})`);
 		}
@@ -163,5 +167,12 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 	// Delete temp file
 	fs.unlinkSync(tempFilePath);
 }
+
+
+// remove all non alphanumeric characters
+// also remove spaces
+const sanitizeName = (name: string) => {
+	return name.replace(/[^a-zA-Z0-9]/g, "");
+};
 
 export { handleMessageGPT, handleDeleteConversation };

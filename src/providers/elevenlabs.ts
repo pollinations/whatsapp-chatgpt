@@ -18,6 +18,9 @@ async function ttsRequest(text: string): Promise<Buffer | null> {
 		"xi-api-key": apiKey
 	};
 
+
+	text = sliceText(text);
+
 	const data = {
 		"text": text,
 		"model_id": "eleven_multilingual_v2",
@@ -45,6 +48,25 @@ async function ttsRequest(text: string): Promise<Buffer | null> {
 		console.error("An error occured (TTS request)", error);
 		return null;
 	}
+}
+
+// text should be a maximum of 400 characters. 
+// try to slice by punctuation i.e. the last letters,words 
+// up to the last punctuation if the size exceeds
+function sliceText(text: string): string {
+	const maxCharacters = 400;
+	if (text.length > maxCharacters) {
+		let slicedText = text.slice(0, maxCharacters);
+		const lastPunctuation = slicedText.match(/.*[.!?]/g);
+		const lastSpace = slicedText.match(/.* /g);
+		if (lastPunctuation && lastPunctuation[0]) {
+			slicedText = lastPunctuation[0];
+		} else if (lastSpace && lastSpace[0]) {
+			slicedText = lastSpace[0];
+		}
+		return slicedText;
+	}
+	return text;
 }
 
 export { ttsRequest };
