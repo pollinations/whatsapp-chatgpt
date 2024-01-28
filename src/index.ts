@@ -77,7 +77,7 @@ const start = async () => {
 	});
 
 	// WhatsApp message
-	client.on(Events.MESSAGE_RECEIVED, async (message: any) => {
+	client.on(Events.MESSAGE_RECEIVED, debounce(async (message: any) => {
 		// Ignore if message is from status broadcast
 		if (message.from == constants.statusBroadcast) return;
 
@@ -85,10 +85,10 @@ const start = async () => {
 		if (message.hasQuotedMsg) return;
 
 		await handleIncomingMessage(message);
-	});
+	}, 10000));
 
 	// Reply to own message
-	client.on(Events.MESSAGE_CREATE, async (message: Message) => {
+	client.on(Events.MESSAGE_CREATE, debounce(async (message: Message) => {
 		// Ignore if message is from status broadcast
 		if (message.from == constants.statusBroadcast) return;
 
@@ -99,7 +99,7 @@ const start = async () => {
 		if (!message.fromMe) return;
 
 		await handleIncomingMessage(message);
-	});
+	}, 10000));
 
 	// WhatsApp initialization
 	client.initialize();
@@ -108,3 +108,18 @@ const start = async () => {
 start();
 
 export { botReadyTimestamp };
+
+// this debounce function waits 5 seconds before executing the function
+// functional
+function debounce(func: any, wait: number) {
+	let timeout: NodeJS.Timeout | null = null;
+	return (...args: any) => {
+		if (timeout) {
+			clearTimeout(timeout);
+		}
+		timeout = setTimeout(() => {
+			timeout = null;
+			func(...args);
+		}, wait);
+	};
+}

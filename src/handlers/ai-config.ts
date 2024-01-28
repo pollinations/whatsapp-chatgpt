@@ -68,16 +68,16 @@ const handleMessageAIConfig = async (message: Message, prompt: any) => {
 					}
 				}
 			}
-			message.reply(helpMessage);
-			return;
+			return () => message.reply(helpMessage);
+
 		}
 
 		// !config <target> <type> <value>
 		if (args.length < 2) {
-			message.reply(
+			return () => message.reply(
 				"Invalid number of arguments, please use the following format: <target> <type> <value> or type !config help for more information."
 			);
-			return;
+			
 		}
 
 		const target: string = args[0];
@@ -85,35 +85,34 @@ const handleMessageAIConfig = async (message: Message, prompt: any) => {
 		const value: string | undefined = args.length >= 3 ? args.slice(2).join(" ") : undefined;
 
 		if (!(target in aiConfigTarget) && !(target in aiConfig.commandsMap)) {
-			message.reply("Invalid target, please use one of the following: " + Object.keys(aiConfigTarget).join(", "));
-			return;
+			return () => message.reply("Invalid target, please use one of the following: " + Object.keys(aiConfigTarget).join(", "));
 		}
 
 		if (target && type && aiConfig.commandsMap[target]) {
 			if (aiConfig.commandsMap[target][type]) {
 				aiConfig.commandsMap[target][type].execute(message, value);
 			} else {
-				message.reply("Invalid command, please use one of the following: " + Object.keys(aiConfig.commandsMap[target]).join(", "));
+				return () => message.reply("Invalid command, please use one of the following: " + Object.keys(aiConfig.commandsMap[target]).join(", "));
 			}
 			return;
 		}
 
 		if (typeof aiConfigTypes[target] !== "object" || !(type in aiConfigTypes[target])) {
-			message.reply("Invalid type, please use one of the following: " + Object.keys(aiConfigTypes[target]).join(", "));
-			return;
+			return () => message.reply("Invalid type, please use one of the following: " + Object.keys(aiConfigTypes[target]).join(", "));
+		
 		}
 
 		if (value === undefined || (typeof aiConfigValues[target][type] === "object" && !(value in aiConfigValues[target][type]))) {
-			message.reply("Invalid value, please use one of the following: " + Object.keys(aiConfigValues[target][type]).join(", "));
-			return;
+			return () => message.reply("Invalid value, please use one of the following: " + Object.keys(aiConfigValues[target][type]).join(", "));
+			
 		}
 
 		aiConfig[target][type] = value;
 
-		message.reply("Successfully set " + target + " " + type + " to " + value);
+		return () => message.reply("Successfully set " + target + " " + type + " to " + value);
 	} catch (error: any) {
 		console.error("An error occured", error);
-		message.reply("An error occured, please contact the administrator. (" + error.message + ")");
+		return () => message.reply("An error occured, please contact the administrator. (" + error.message + ")");
 	}
 };
 

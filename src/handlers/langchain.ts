@@ -14,10 +14,10 @@ const handleMessageLangChain = async (message: Message, prompt: string) => {
 		cli.print(`[GPT] Answer to ${message.from}: ${output}  | OpenAI request took ${end}ms)`);
 
 		// Default: Text reply
-		message.reply(output);
+		return () => message.reply(output);
 	} catch (error: any) {
 		console.error("An error occured", error);
-		message.reply("An error occured, please contact the administrator. (" + error.message + ")");
+		return () => message.reply("An error occured, please contact the administrator. (" + error.message + ")");
 	}
 };
 
