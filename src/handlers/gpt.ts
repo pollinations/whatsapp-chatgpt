@@ -84,7 +84,7 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		cli.print(`[GPT] Answer to ${message.from}: ${response.text}  | OpenAI request took ${end}ms)`);
 
 		// TTS reply (Default: disabled)
-		if (getConfig("tts", "enabled") && message.type !== "chat") {
+		if (getConfig("tts", "enabled")){ // && message.type !== "chat") {
 			sendVoiceMessageReply(message, response.text);
 			// message.reply(response.text);
 			return;
