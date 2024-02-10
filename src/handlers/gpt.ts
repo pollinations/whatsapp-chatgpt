@@ -25,6 +25,33 @@ import { aiConfig, getConfig } from "./ai-config";
 console.log("pre prompt", process.env.PRE_PROMPT)
 console.log(process.env.PRE_PROMPT)
 // process.exit(0)
+const buildPrompt = (configPrePrompt: string, prompt: string): string => {
+    let promptBuilder = "";
+    if (configPrePrompt != null && configPrePrompt.trim() != "") {
+        promptBuilder += configPrePrompt + "\n\n";
+    }
+    promptBuilder += prompt + "\n\n";
+    return promptBuilder;
+};
+
+const getTTSRequestFunction = (ttsMode: TTSMode): (() => Promise<Buffer | null>) => {
+    switch (ttsMode) {
+        case TTSMode.SpeechAPI:
+            return speechTTSRequest;
+        case TTSMode.AWSPolly:
+            return awsTTSRequest;
+        case TTSMode.ElevenLabs:
+            return elevenlabsTTSRequest;
+        default:
+            return speechTTSRequest;
+    }
+};
+
+const generateAudioFilePath = (): string => {
+    const tempFolder = os.tmpdir();
+    return path.join(tempFolder, randomUUID() + ".opus");
+};
+
 const handleMessageGPT = async (message: Message, prompt: string) => {
 	console.log("message", message["_data"]);
 	try {
@@ -57,13 +84,7 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 				name: sanitizeName(message["_data"]?.notifyName),
 			});
 		} else {
-			let promptBuilder = "";
-
-			// Pre prompt
-			if (config.prePrompt != null && config.prePrompt.trim() != "") {
-				promptBuilder += config.prePrompt + "\n\n";
-			}
-			promptBuilder += prompt + "\n\n";
+			const promptBuilder = buildPrompt(config.prePrompt, prompt);
 
 			// Handle message with new conversation
 			// log prompt
@@ -108,37 +129,7 @@ const handleDeleteConversation = async (message: Message) => {
 
 async function sendVoiceMessageReply(message: Message, gptTextResponse: string) {
 	var logTAG = "[TTS]";
-	var ttsRequest = async function (): Promise<Buffer | null> {
-		return await speechTTSRequest(gptTextResponse);
-	};
-
-	switch (config.ttsMode) {
-		case TTSMode.SpeechAPI:
-			logTAG = "[SpeechAPI]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await speechTTSRequest(gptTextResponse);
-			};
-			break;
-
-		case TTSMode.AWSPolly:
-			logTAG = "[AWSPolly]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await awsTTSRequest(gptTextResponse);
-			};
-			break;
-		case TTSMode.ElevenLabs:
-			logTAG = "[ElevenLabs]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await elevenlabsTTSRequest(gptTextResponse);
-			};
-			break;
-		default:
-			logTAG = "[SpeechAPI]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await speechTTSRequest(gptTextResponse);
-			};
-			break;
-	}
+	const ttsRequest = getTTSRequestFunction(config.ttsMode);
 
 	// Get audio buffer
 	cli.print(`${logTAG} Generating audio from GPT response "${gptTextResponse}"...`);
@@ -153,9 +144,7 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 
 	cli.print(`${logTAG} Audio generated!`);
 
-	// Get temp folder and file path
-	const tempFolder = os.tmpdir();
-	const tempFilePath = path.join(tempFolder, randomUUID() + ".opus");
+	const tempFilePath = generateAudioFilePath();
 
 	// Save buffer to temp file
 	fs.writeFileSync(tempFilePath, audioBuffer);
