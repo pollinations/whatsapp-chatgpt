@@ -21,7 +21,7 @@ import { moderateIncomingPrompt } from "./moderation";
 import { aiConfig, getConfig } from "./ai-config";
 
 // Mapping from number to last conversation id
-const conversations = {};
+// Removed global state for conversations
 console.log("pre prompt", process.env.PRE_PROMPT)
 console.log(process.env.PRE_PROMPT)
 // process.exit(0)
