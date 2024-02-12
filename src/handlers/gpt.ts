@@ -172,6 +172,7 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 // remove all non alphanumeric characters
 // also remove spaces
 const sanitizeName = (name: string) => {
+	if (!name) return "unknown";
 	return name.replace(/[^a-zA-Z0-9]/g, "");
 };
 
