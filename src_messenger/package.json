@@ -12,6 +12,7 @@
   "dependencies": {
     "fb-chat-api-temp": "github:ntkhang03/fb-chat-api-temp",
     "openai": "^4.25.0",
-    "ramda": "^0.29.1"
+    "ramda": "^0.29.1",
+    "whatsapp-web.js": "github:Julzk/whatsapp-web.js"
   }
 }
