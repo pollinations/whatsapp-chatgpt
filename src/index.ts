@@ -85,7 +85,7 @@ const start = async () => {
 		if (message.hasQuotedMsg) return;
 
 		await handleIncomingMessage(message);
-	}, 10000));
+	}, 6000));
 
 	// Reply to own message
 	client.on(Events.MESSAGE_CREATE, debounce(async (message: Message) => {
@@ -99,7 +99,7 @@ const start = async () => {
 		if (!message.fromMe) return;
 
 		await handleIncomingMessage(message);
-	}, 10000));
+	}, 6000));
 
 	// WhatsApp initialization
 	client.initialize();

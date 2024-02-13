@@ -22,8 +22,13 @@ import { moderateIncomingPrompt } from "./moderation";
 import { aiConfig, getConfig } from "./ai-config";
 import { generateAudio } from "../providers/musicgen";
 
+// New import for executing shell commands
+import { exec } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(exec);
 // Mapping from number to last conversation id
 const conversations = {};
+
 console.log("pre prompt", process.env.PRE_PROMPT)
 console.log(process.env.PRE_PROMPT)
 // process.exit(0)
@@ -131,11 +136,26 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 			break;
 	}
 
+	
+	
+	// extract 
+	// response
+	// audio prompt from gptTextResponse
+	// image prompt
+	// if you cannot find the strings just set all prompts to the whole response
+	//Response format:
+	// [response]
+	// Image prompt: [image prompt]
+	// Audio prompt: [audio prompt]
+	// 
+
+	const { audioPrompt, imagePrompt, response } = extractPrompts(gptTextResponse)
+
 	// Start generating audio and TTS request in parallel
 	cli.print(`${logTAG} Generating audio from GPT response "${gptTextResponse}"...`);
 	const [audioBuffer, audioFile] = await Promise.all([
-		ttsRequestFunction(gptTextResponse),
-		generateAudio(gptTextResponse)
+		ttsRequestFunction(response),
+		generateAudio(audioPrompt)
 	]);
 
 	// Check if audio buffer is valid
@@ -156,98 +176,66 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 
 	// Save buffer to temp file
 	fs.writeFileSync(tempFilePath, audioBuffer);
-	// Process audio with ffmpeg to add reverb and get new file path
-	const reverbFilePath = await addReverb(tempFilePath);
-	// Add silence to the beginning and end of the audio after adding reverb
-	const withSilenceAtStart = await addSilenceToAudio(reverbFilePath);
-	const processedFilePath = await addSilenceToEnd(withSilenceAtStart);
-	// Generate mixed audio
-	const mixedAudioPath = await mixAndSendAudio(processedFilePath, audioFile);
+	// Process audio with the all-in-one Python script
+	const processedAudioPath = await processAudioWithPythonScript(tempFilePath, audioFile);
 
-	if (!mixedAudioPath) {
-		throw new Error("could not mix audio");
+	if (!processedAudioPath) {
+		throw new Error("could not process audio with Python script");
 	}
-	// Send mixed audio
-	const mixedAudioBuffer = fs.readFileSync(mixedAudioPath);
-	const messageMedia = new MessageMedia("audio/ogg; codecs=opus", mixedAudioBuffer.toString("base64"));
+	// Convert processed audio to OPUS format
+	const opusAudioPath = await convertAudioToOpus(processedAudioPath);
+	if (!opusAudioPath) {
+		throw new Error("could not convert audio to OPUS format");
+	}
+	// Send converted OPUS audio
+	const opusAudioBuffer = fs.readFileSync(opusAudioPath as string); // Type assertion
+	const messageMedia = new MessageMedia("audio/ogg; codecs=opus", opusAudioBuffer.toString("base64"));
 	message.reply(messageMedia);
 
-	// Delete mixed audio temp file
-	fs.unlinkSync(mixedAudioPath);
+	// Delete processed and OPUS audio temp files
+	fs.unlinkSync(processedAudioPath);
+	fs.unlinkSync(opusAudioPath as string);
 
 	// Delete common temp files
 	fs.unlinkSync(tempFilePath);
-	fs.unlinkSync(processedFilePath);
 }
 
 
-const addReverb = async (filePath: string): Promise<string> => {
-	const outputFilePath = filePath.replace('.opus', '_enhanced.opus');
+const extractPrompts = (gptTextResponse: string) => {
+  const regex = /(.*?)Image prompt:(.*?)Audio prompt:(.*)/s;
+  const match = regex.exec(gptTextResponse);
+
+  const response = match && match[1] ? match[1].trim() : gptTextResponse;
+  const imagePrompt = match && match[2] ? match[2].trim() : gptTextResponse;
+  const audioPrompt = match && match[3] ? match[3].trim() : gptTextResponse;
+
+  console.log("extracted", { response, imagePrompt, audioPrompt });
+  return { response, imagePrompt, audioPrompt };
+};
+
+const convertAudioToOpus = async (inputPath:string) => {
+	const outputPath = inputPath.replace(/\.[^/.]+$/, "") + ".opus";
 	return new Promise((resolve, reject) => {
-		ffmpeg(filePath)
-			.audioFilters('aecho=0.8:0.9:60:0.4')
-			.output(outputFilePath)
-			.on('end', () => resolve(outputFilePath))
+		ffmpeg(inputPath)
+			.output(outputPath)
+			.audioCodec('libopus')
+			.on('end', () => resolve(outputPath))
 			.on('error', (err) => reject(err))
 			.run();
 	});
 };
 
-const addSilenceToAudio = async (filePath: string): Promise<string> => {
-  const outputFilePath = filePath.replace('.opus', '_padded.opus');
-  try {
-    await new Promise((resolve, reject) => {
-      ffmpeg(filePath)
-        .inputOptions(['-t', '2', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000'])
-        .complexFilter(['[0:a][1:a]concat=n=2:v=0:a=1'])
-        .output(outputFilePath)
-        .on('end', resolve)
-        .on('error', reject)
-        .run();
-    });
-    return outputFilePath;
-  } catch (err) {
-    throw new Error(`Failed to add silence to audio: ${err}`);
-  }
-};
+// Replacing audio processing functions with a call to the Python script
+const processAudioWithPythonScript = async (ttsFilePath: string, backgroundFilePath: string): Promise<string> => {
+	try {
+	  const { stdout } = await execAsync(`python3 src_audio_fx/mix_bg_and_tts.py "${ttsFilePath}" "${backgroundFilePath}"`);
+	  return stdout.trim(); // The Python script outputs the path of the processed file
+	} catch (error) {
+	  throw new Error(`Failed to process audio with Python script: ${error}`);
+	}
+  };
 
-const addSilenceToEnd = async (filePath: string): Promise<string> => {
-  const outputFilePath = filePath.replace('.opus', '_final.opus');
-  try {
-    await new Promise((resolve, reject) => {
-      ffmpeg(filePath)
-        .inputOptions(['-t', '2', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000'])
-        .complexFilter(['[1:a][0:a]concat=n=2:v=0:a=1'])
-        .output(outputFilePath)
-        .on('end', resolve)
-        .on('error', reject)
-        .run();
-    });
-    return outputFilePath;
-  } catch (err) {
-    throw new Error(`Failed to add silence to the end of audio: ${err}`);
-  }
-};
-// Mix generated audio with TTS audio and send, adjusting mix duration to include 2 seconds of silence before and after TTS, and looping the generated audio to match the TTS duration
-const mixAndSendAudio = async (ttsFilePath: string, generatedAudioPath: string): Promise<string> => {
-  const mixedAudioPath = ttsFilePath.replace('.opus', '_mixed.opus');
-  return new Promise((resolve, reject) => {
-    ffmpeg()
-      .input(ttsFilePath)
-      .input(generatedAudioPath)
-      .complexFilter([
-        '[1:a]aloop=loop=-1:size=2e+09[a1]', // Loop generated audio to match the TTS duration plus silence
-        '[a1]volume=0.2[a2]', // Set looped generated audio volume to 0.2
-        '[0:a][a2]amix=inputs=2:duration=first[aout]' // Mix audio tracks, using the duration of the first input (TTS + silence before and after)
-      ])
-      .outputOptions(['-map [aout]'])
-      .output(mixedAudioPath)
-      .on('end', () => resolve(mixedAudioPath))
-      .on('error', (err) => reject(err))
-      .run();
-  });
-};
-
+  
 const sanitizeName = (name: string) => {
 	if (!name) return "unknown";
 	return name.replace(/[^a-zA-Z0-9]/g, "");
