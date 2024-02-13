@@ -6,6 +6,7 @@ import { Message, MessageMedia } from "whatsapp-web.js";
 import { chatgpt } from "../providers/openai";
 import * as cli from "../cli/ui";
 import config from "../config";
+import ffmpeg from "fluent-ffmpeg";
 
 import { ChatMessage } from "chatgpt";
 
@@ -19,6 +20,7 @@ import { TTSMode } from "../types/tts-mode";
 // Moderation
 import { moderateIncomingPrompt } from "./moderation";
 import { aiConfig, getConfig } from "./ai-config";
+import { generateAudio } from "../providers/musicgen";
 
 // Mapping from number to last conversation id
 const conversations = {};
@@ -107,48 +109,43 @@ const handleDeleteConversation = async (message: Message) => {
 };
 
 async function sendVoiceMessageReply(message: Message, gptTextResponse: string) {
-	var logTAG = "[TTS]";
-	var ttsRequest = async function (): Promise<Buffer | null> {
-		return await speechTTSRequest(gptTextResponse);
-	};
+	let logTAG = "[TTS]";
+	let ttsRequestFunction;
 
 	switch (config.ttsMode) {
 		case TTSMode.SpeechAPI:
 			logTAG = "[SpeechAPI]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await speechTTSRequest(gptTextResponse);
-			};
+			ttsRequestFunction = speechTTSRequest;
 			break;
-
 		case TTSMode.AWSPolly:
 			logTAG = "[AWSPolly]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await awsTTSRequest(gptTextResponse);
-			};
+			ttsRequestFunction = awsTTSRequest;
 			break;
 		case TTSMode.ElevenLabs:
 			logTAG = "[ElevenLabs]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await elevenlabsTTSRequest(gptTextResponse);
-			};
+			ttsRequestFunction = elevenlabsTTSRequest;
 			break;
 		default:
 			logTAG = "[SpeechAPI]";
-			ttsRequest = async function (): Promise<Buffer | null> {
-				return await speechTTSRequest(gptTextResponse);
-			};
+			ttsRequestFunction = speechTTSRequest;
 			break;
 	}
 
-	// Get audio buffer
+	// Start generating audio and TTS request in parallel
 	cli.print(`${logTAG} Generating audio from GPT response "${gptTextResponse}"...`);
-	// console.log("message", message)
-	const audioBuffer = await ttsRequest();
+	const [audioBuffer, audioFile] = await Promise.all([
+		ttsRequestFunction(gptTextResponse),
+		generateAudio(gptTextResponse)
+	]);
 
 	// Check if audio buffer is valid
 	if (audioBuffer == null || audioBuffer.length == 0) {
 		message.reply(`${logTAG} couldn't generate audio, please contact the administrator.`);
 		return;
+	}
+
+	if (!audioFile) {
+		throw new Error("could not get generated audio");
 	}
 
 	cli.print(`${logTAG} Audio generated!`);
@@ -159,21 +156,102 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 
 	// Save buffer to temp file
 	fs.writeFileSync(tempFilePath, audioBuffer);
+	// Process audio with ffmpeg to add reverb and get new file path
+	const reverbFilePath = await addReverb(tempFilePath);
+	// Add silence to the beginning and end of the audio after adding reverb
+	const withSilenceAtStart = await addSilenceToAudio(reverbFilePath);
+	const processedFilePath = await addSilenceToEnd(withSilenceAtStart);
+	// Generate mixed audio
+	const mixedAudioPath = await mixAndSendAudio(processedFilePath, audioFile);
 
-	// Send audio
-	const messageMedia = new MessageMedia("audio/ogg; codecs=opus", audioBuffer.toString("base64"));
+	if (!mixedAudioPath) {
+		throw new Error("could not mix audio");
+	}
+	// Send mixed audio
+	const mixedAudioBuffer = fs.readFileSync(mixedAudioPath);
+	const messageMedia = new MessageMedia("audio/ogg; codecs=opus", mixedAudioBuffer.toString("base64"));
 	message.reply(messageMedia);
 
-	// Delete temp file
+	// Delete mixed audio temp file
+	fs.unlinkSync(mixedAudioPath);
+
+	// Delete common temp files
 	fs.unlinkSync(tempFilePath);
+	fs.unlinkSync(processedFilePath);
 }
 
 
-// remove all non alphanumeric characters
-// also remove spaces
+const addReverb = async (filePath: string): Promise<string> => {
+	const outputFilePath = filePath.replace('.opus', '_enhanced.opus');
+	return new Promise((resolve, reject) => {
+		ffmpeg(filePath)
+			.audioFilters('aecho=0.8:0.9:60:0.4')
+			.output(outputFilePath)
+			.on('end', () => resolve(outputFilePath))
+			.on('error', (err) => reject(err))
+			.run();
+	});
+};
+
+const addSilenceToAudio = async (filePath: string): Promise<string> => {
+  const outputFilePath = filePath.replace('.opus', '_padded.opus');
+  try {
+    await new Promise((resolve, reject) => {
+      ffmpeg(filePath)
+        .inputOptions(['-t', '2', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000'])
+        .complexFilter(['[0:a][1:a]concat=n=2:v=0:a=1'])
+        .output(outputFilePath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    return outputFilePath;
+  } catch (err) {
+    throw new Error(`Failed to add silence to audio: ${err}`);
+  }
+};
+
+const addSilenceToEnd = async (filePath: string): Promise<string> => {
+  const outputFilePath = filePath.replace('.opus', '_final.opus');
+  try {
+    await new Promise((resolve, reject) => {
+      ffmpeg(filePath)
+        .inputOptions(['-t', '2', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000'])
+        .complexFilter(['[1:a][0:a]concat=n=2:v=0:a=1'])
+        .output(outputFilePath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    return outputFilePath;
+  } catch (err) {
+    throw new Error(`Failed to add silence to the end of audio: ${err}`);
+  }
+};
+// Mix generated audio with TTS audio and send, adjusting mix duration to include 2 seconds of silence before and after TTS, and looping the generated audio to match the TTS duration
+const mixAndSendAudio = async (ttsFilePath: string, generatedAudioPath: string): Promise<string> => {
+  const mixedAudioPath = ttsFilePath.replace('.opus', '_mixed.opus');
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(ttsFilePath)
+      .input(generatedAudioPath)
+      .complexFilter([
+        '[1:a]aloop=loop=-1:size=2e+09[a1]', // Loop generated audio to match the TTS duration plus silence
+        '[a1]volume=0.2[a2]', // Set looped generated audio volume to 0.2
+        '[0:a][a2]amix=inputs=2:duration=first[aout]' // Mix audio tracks, using the duration of the first input (TTS + silence before and after)
+      ])
+      .outputOptions(['-map [aout]'])
+      .output(mixedAudioPath)
+      .on('end', () => resolve(mixedAudioPath))
+      .on('error', (err) => reject(err))
+      .run();
+  });
+};
+
 const sanitizeName = (name: string) => {
 	if (!name) return "unknown";
 	return name.replace(/[^a-zA-Z0-9]/g, "");
 };
+
 
 export { handleMessageGPT, handleDeleteConversation };
