@@ -25,6 +25,7 @@ import { generateAudio } from "../providers/musicgen";
 // New import for executing shell commands
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { handleMessageDALLE } from "./dalle";
 const execAsync = promisify(exec);
 // Mapping from number to last conversation id
 const conversations = {};
@@ -151,6 +152,10 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 
 	const { audioPrompt, imagePrompt, response } = extractPrompts(gptTextResponse)
 
+	const imagePromptSuffix = "in a futuristic forest, with a dystopian city melting in black and gold liquid, and black holograms of hybrid mythical creature"
+	if (Math.random() < 0.3)
+		handleMessageDALLE(message, imagePrompt+". "+imagePromptSuffix)
+
 	// Start generating audio and TTS request in parallel
 	cli.print(`${logTAG} Generating audio from GPT response "${gptTextResponse}"...`);
 	const [audioBuffer, audioFile] = await Promise.all([
@@ -191,6 +196,7 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 	const opusAudioBuffer = fs.readFileSync(opusAudioPath as string); // Type assertion
 	const messageMedia = new MessageMedia("audio/ogg; codecs=opus", opusAudioBuffer.toString("base64"));
 	message.reply(messageMedia);
+
 
 	// Delete processed and OPUS audio temp files
 	fs.unlinkSync(processedAudioPath);

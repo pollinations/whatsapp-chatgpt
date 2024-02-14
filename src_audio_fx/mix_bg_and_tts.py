@@ -32,7 +32,8 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     background_board = Pedalboard([
         # LowpassFilter(cutoff_frequency_hz=12000),
         # HighpassFilter(cutoff_frequency_hz=200),
-        Compressor(threshold_db=-24, ratio=10, release_ms=400)
+        Compressor(threshold_db=-24, ratio=10, release_ms=400),
+        Gain(gain_db=3)
     ])
     compressed_background_audio = background_board(background_audio, bg_samplerate)
     logging.info("Background audio compressed.")
@@ -49,19 +50,20 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     logging.info("Background audio looped to match TTS audio length.")
 
     # Create a pedalboard with effects for the TTS audio
-    tts_board = Pedalboard([
-        Reverb(room_size=0.25)
-    ])
-    processed_tts_audio = tts_board(tts_audio, tts_samplerate)
+    # tts_board = Pedalboard([
+    #     Reverb(room_size=0.25)
+    # ])
+    # processed_tts_audio = tts_board(tts_audio, tts_samplerate)
+    processed_tts_audio = tts_audio
     logging.info("TTS audio processed with effects.")
     # Mix the processed TTS audio with the looped background audio, making the background significantly quieter
     mixed_audio = processed_tts_audio + looped_background_audio * 0.2  # Reduce background audio volume
     logging.info("TTS and background audio mixed.")
     # Apply heavy compression to the final mix with a long release and significantly increase volume with a Gain
     final_mix_board = Pedalboard([
-        Compressor(threshold_db=-30, ratio=4, release_ms=400),
+        Compressor(threshold_db=-30, ratio=8, release_ms=800),
         Gain(gain_db=20),  # Significantly increase volume with a Gain
-        Reverb(room_size=0.25,wet_level=0.1,width=0.2)  # Add reverb to make them sound like they are in the same space
+        Reverb(room_size=0.3,wet_level=0.15,width=0.2)  # Add reverb to make them sound like they are in the same space
     ])
     final_mixed_audio = final_mix_board(mixed_audio, tts_samplerate)
     logging.info("Final audio mix compressed and processed.")
