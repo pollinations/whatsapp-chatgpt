@@ -20,7 +20,8 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
         tts_audio_data = np.expand_dims(tts_audio_data, axis=0)
     tts_channels = tts_audio_data.shape[0]
     tts_silence = np.zeros((tts_channels, int(tts_samplerate * 4)))
-    tts_audio = np.concatenate((tts_silence, tts_audio_data, tts_silence), axis=1)
+    tts_silence_start = np.zeros((tts_channels, int(tts_samplerate * 0.5)))
+    tts_audio = np.concatenate((tts_silence_start, tts_audio_data, tts_silence), axis=1)
     logging.info("TTS audio file loaded and processed.")
     # Load the background audio file, normalize it, and heavily compress it before entering the chains
     background_audio, bg_samplerate = librosa.load(background_audio_path, sr=None, mono=False)
@@ -33,7 +34,7 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
         # LowpassFilter(cutoff_frequency_hz=12000),
         # HighpassFilter(cutoff_frequency_hz=200),
         Compressor(threshold_db=-24, ratio=10, release_ms=400),
-        Gain(gain_db=3)
+        Gain(gain_db=0)
     ])
     compressed_background_audio = background_board(background_audio, bg_samplerate)
     logging.info("Background audio compressed.")
@@ -49,6 +50,16 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     looped_background_audio = np.tile(compressed_background_audio, (1, repeat_times))[:, :tts_audio.shape[-1]]
     logging.info("Background audio looped to match TTS audio length.")
 
+    # Fade in the background audio over one second
+    fade_in_samples = int(tts_samplerate * 2)  # 1 second fade in
+    fade_in = np.linspace(0., 1., fade_in_samples)
+    looped_background_audio[:,:fade_in_samples] = np.multiply(looped_background_audio[:,:fade_in_samples], fade_in)
+
+    # Fade out the background audio over the last second
+    fade_out_samples = int(tts_samplerate * 2)  # 1 second fade out
+    fade_out = np.linspace(1., 0., fade_out_samples)
+    looped_background_audio[:,-fade_out_samples:] = np.multiply(looped_background_audio[:,-fade_out_samples:], fade_out)
+
     # Create a pedalboard with effects for the TTS audio
     # tts_board = Pedalboard([
     #     Reverb(room_size=0.25)
@@ -57,12 +68,12 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     processed_tts_audio = tts_audio
     logging.info("TTS audio processed with effects.")
     # Mix the processed TTS audio with the looped background audio, making the background significantly quieter
-    mixed_audio = processed_tts_audio + looped_background_audio * 0.2  # Reduce background audio volume
+    mixed_audio = processed_tts_audio + looped_background_audio * 0.1  # Reduce background audio volume
     logging.info("TTS and background audio mixed.")
     # Apply heavy compression to the final mix with a long release and significantly increase volume with a Gain
     final_mix_board = Pedalboard([
-        Compressor(threshold_db=-30, ratio=8, release_ms=800),
-        Gain(gain_db=20),  # Significantly increase volume with a Gain
+        Compressor(threshold_db=-37, ratio=8, release_ms=2000),
+        Gain(gain_db=27),  # Significantly increase volume with a Gain
         Reverb(room_size=0.3,wet_level=0.15,width=0.2)  # Add reverb to make them sound like they are in the same space
     ])
     final_mixed_audio = final_mix_board(mixed_audio, tts_samplerate)

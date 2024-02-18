@@ -154,7 +154,7 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 
 	const imagePromptSuffix = "in a futuristic forest, with a dystopian city melting in black and gold liquid, and black holograms of hybrid mythical creature"
 	if (Math.random() < 0.3)
-		handleMessageDALLE(message, imagePrompt+". "+imagePromptSuffix)
+		handleMessageDALLE(message, imagePromptSuffix+". "+imagePrompt)
 
 	// Start generating audio and TTS request in parallel
 	cli.print(`${logTAG} Generating audio from GPT response "${gptTextResponse}"...`);
@@ -210,7 +210,7 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 const extractPrompts = (gptTextResponse: string) => {
   const regex = /(.*?)Image prompt:(.*?)Audio prompt:(.*)/s;
   const match = regex.exec(gptTextResponse);
-
+  gptTextResponse = gptTextResponse.slice(0, 200)
   const response = match && match[1] ? match[1].trim() : gptTextResponse;
   const imagePrompt = match && match[2] ? match[2].trim() : gptTextResponse;
   const audioPrompt = match && match[3] ? match[3].trim() : gptTextResponse;
