@@ -35,7 +35,7 @@ const generateAudio = async (prompt: string): Promise<string | null> => {
   const localData = {
     "input": {
       "model": "facebook/magnet-medium-10secs",
-      "prompt": prompt,
+      "prompt": sanitizePrompt,
       "variations": 1,
     }
   };

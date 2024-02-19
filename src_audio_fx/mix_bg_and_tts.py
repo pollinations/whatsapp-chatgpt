@@ -10,7 +10,7 @@ import tempfile
 
 logging.basicConfig(level=logging.INFO)
 
-def process_and_mix_audio(tts_audio_path, background_audio_path):
+def process_and_mix_audio(tts_audio_path, background_audio_path, tape_hiss_path='assets/tape.aif'):
     logging.info("Starting audio processing and mixing.")
     # Load the TTS audio file and append 2 seconds of silence to the start and end, considering stereo or mono
     tts_audio_data, tts_samplerate = librosa.load(tts_audio_path, sr=None, mono=False)
@@ -30,9 +30,14 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     background_audio = librosa.util.normalize(background_audio)
     logging.info("Background audio normalized.")
 
+    # Load the tape hiss audio file
+    tape_hiss_audio, tape_hiss_samplerate = librosa.load(tape_hiss_path, sr=None, mono=False)
+    logging.info("Loading tape hiss audio file.")
+    # Normalize the tape hiss audio
+    tape_hiss_audio = librosa.util.normalize(tape_hiss_audio)
+    logging.info("Tape hiss audio normalized.")
+
     background_board = Pedalboard([
-        # LowpassFilter(cutoff_frequency_hz=12000),
-        # HighpassFilter(cutoff_frequency_hz=200),
         Compressor(threshold_db=-24, ratio=10, release_ms=400),
         Gain(gain_db=0)
     ])
@@ -50,6 +55,11 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     looped_background_audio = np.tile(compressed_background_audio, (1, repeat_times))[:, :tts_audio.shape[-1]]
     logging.info("Background audio looped to match TTS audio length.")
 
+    # Loop the tape hiss audio to match the length of the TTS audio
+    repeat_times_hiss = int(np.ceil(tts_audio.shape[-1] / tape_hiss_audio.shape[-1]))
+    looped_tape_hiss_audio = np.tile(tape_hiss_audio, (1, repeat_times_hiss))[:, :tts_audio.shape[-1]]
+    logging.info("Tape hiss audio looped to match TTS audio length.")
+
     # Fade in the background audio over one second
     fade_in_samples = int(tts_samplerate * 2)  # 1 second fade in
     fade_in = np.linspace(0., 1., fade_in_samples)
@@ -60,11 +70,6 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     fade_out = np.linspace(1., 0., fade_out_samples)
     looped_background_audio[:,-fade_out_samples:] = np.multiply(looped_background_audio[:,-fade_out_samples:], fade_out)
 
-    # Create a pedalboard with effects for the TTS audio
-    # tts_board = Pedalboard([
-    #     Reverb(room_size=0.25)
-    # ])
-    # processed_tts_audio = tts_board(tts_audio, tts_samplerate)
     processed_tts_audio = tts_audio
     logging.info("TTS audio processed with effects.")
     # Mix the processed TTS audio with the looped background audio, making the background significantly quieter
@@ -78,6 +83,10 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
     ])
     final_mixed_audio = final_mix_board(mixed_audio, tts_samplerate)
     logging.info("Final audio mix compressed and processed.")
+    
+    # Mix in the tape hiss audio after compression and reverb, making it significantly quieter
+    final_mixed_audio = final_mixed_audio + looped_tape_hiss_audio * 0.1  # Reduce tape hiss volume
+    logging.info("Tape hiss mixed into final audio.")
 
     # Generate a unique temporary file path for the mixed audio to avoid conflicts
     mixed_audio_path = tempfile.mktemp(suffix=".wav", prefix="mixed_audio_", dir=tempfile.gettempdir())
@@ -85,7 +94,7 @@ def process_and_mix_audio(tts_audio_path, background_audio_path):
 
     logging.info(f"Final mixed audio shape: {final_mixed_audio.shape}")
     # Save the mixed audio to a new file using AudioFile
-    with AudioFile(mixed_audio_path, 'w', samplerate=tts_samplerate, num_channels=1) as f:
+    with AudioFile(mixed_audio_path, 'w', samplerate=tts_samplerate, num_channels=2) as f:
         f.write(final_mixed_audio)
     logging.info("Mixed audio saved to file.")
 
