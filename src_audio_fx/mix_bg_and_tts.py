@@ -1,12 +1,13 @@
 import os
 import sys
-from pedalboard import Pedalboard, Compressor, Reverb, Gain, LowpassFilter, HighpassFilter
-from pedalboard.io import AudioFile
-
 import numpy as np
 import logging
 import librosa
 import tempfile
+from pedalboard import Pedalboard, Compressor, Reverb, Gain
+from pedalboard.io import AudioFile
+from scipy.signal import resample
+from pydub import AudioSegment
 
 logging.basicConfig(level=logging.INFO)
 
@@ -85,7 +86,7 @@ def process_and_mix_audio(tts_audio_path, background_audio_path, tape_hiss_path=
     logging.info("Final audio mix compressed and processed.")
     
     # Mix in the tape hiss audio after compression and reverb, making it significantly quieter
-    final_mixed_audio = final_mixed_audio + looped_tape_hiss_audio * 0.1  # Reduce tape hiss volume
+    final_mixed_audio = final_mixed_audio + looped_tape_hiss_audio * 0.01  # Reduce tape hiss volume
     logging.info("Tape hiss mixed into final audio.")
 
     # Generate a unique temporary file path for the mixed audio to avoid conflicts
@@ -96,9 +97,12 @@ def process_and_mix_audio(tts_audio_path, background_audio_path, tape_hiss_path=
     # Save the mixed audio to a new file using AudioFile
     with AudioFile(mixed_audio_path, 'w', samplerate=tts_samplerate, num_channels=2) as f:
         f.write(final_mixed_audio)
-    logging.info("Mixed audio saved to file.")
-
-    return mixed_audio_path
+    logging.info("Mixed audio saved to file.", mixed_audio_path)
+    import subprocess
+    opus_audio_path = mixed_audio_path + ".ogg"
+    command = ['ffmpeg', '-y', '-i', mixed_audio_path, '-c:a', 'libopus', opus_audio_path]
+    subprocess.run(command, check=True)
+    return opus_audio_path
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         logging.error("Incorrect number of arguments. Usage: python pedalboard.py <TTS audio path> <Background audio path>")
@@ -107,3 +111,4 @@ if __name__ == "__main__":
     background_audio_path = sys.argv[2]
     mixed_audio_path = process_and_mix_audio(tts_audio_path, background_audio_path)
     print(mixed_audio_path)
+

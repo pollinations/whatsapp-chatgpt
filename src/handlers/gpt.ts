@@ -188,18 +188,18 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 		throw new Error("could not process audio with Python script");
 	}
 	// Convert processed audio to OPUS format
-	const opusAudioPath = await convertAudioToOpus(processedAudioPath);
-	if (!opusAudioPath) {
-		throw new Error("could not convert audio to OPUS format");
-	}
+	const opusAudioPath = processedAudioPath;// await convertAudioToOpus(processedAudioPath);
+	// if (!opusAudioPath) {
+	// 	throw new Error("could not convert audio to OPUS format");
+	// }
 	// Send converted OPUS audio
-	const opusAudioBuffer = fs.readFileSync(opusAudioPath as string); // Type assertion
-	const messageMedia = new MessageMedia("audio/ogg; codecs=opus", opusAudioBuffer.toString("base64"));
-	message.reply(messageMedia);
+	const messageMedia = MessageMedia.fromFilePath(opusAudioPath as string);
+	console.log("uploading", opusAudioPath)
+	message.reply(messageMedia,undefined, { sendAudioAsVoice:true, caption: response});
 
 
 	// Delete processed and OPUS audio temp files
-	fs.unlinkSync(processedAudioPath);
+	// fs.unlinkSync(processedAudioPath);
 	fs.unlinkSync(opusAudioPath as string);
 
 	// Delete common temp files

@@ -34,7 +34,7 @@ const generateAudio = async (prompt: string): Promise<string | null> => {
 
   const localData = {
     "input": {
-      "model": "facebook/magnet-medium-10secs",
+      "model": "facebook/audio-magnet-medium",
       "prompt": sanitizePrompt,
       "variations": 1,
     }
@@ -79,9 +79,9 @@ const generateAudio = async (prompt: string): Promise<string | null> => {
   const replicateData = {
     "version": "e8e2ecd4a1dabb58924aa8300b668290cafae166dd36baf65dad9875877de50e",
     "input": {
-      "prompt": prompt,
+      "prompt": "cats meowing",
       "variations": 1,
-      "model": "facebook/audio-magnet-medium"
+      "model": Math.random() < 0.5 ? "facebook/audio-magnet-medium" : "facebook/magnet-medium-10secs"
     }
   };
 
