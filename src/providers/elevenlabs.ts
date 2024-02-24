@@ -54,7 +54,7 @@ async function ttsRequest(text: string): Promise<Buffer | null> {
 // try to slice by punctuation i.e. the last letters,words 
 // up to the last punctuation if the size exceeds
 function sliceText(text: string): string {
-	const maxCharacters = 400;
+	const maxCharacters = 1000;
 	if (text.length > maxCharacters) {
 		let slicedText = text.slice(0, maxCharacters);
 		const lastPunctuation = slicedText.match(/.*[.!?]/g);

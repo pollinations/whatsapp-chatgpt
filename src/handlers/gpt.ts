@@ -210,10 +210,10 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 const extractPrompts = (gptTextResponse: string) => {
   const regex = /(.*?)Image prompt:(.*?)Audio prompt:(.*)/s;
   const match = regex.exec(gptTextResponse);
-  gptTextResponse = gptTextResponse.slice(0, 200)
+//   gptTextResponse = gptTextResponse.slice(0, 200)
   const response = match && match[1] ? match[1].trim() : gptTextResponse;
   const imagePrompt = match && match[2] ? match[2].trim() : gptTextResponse;
-  const audioPrompt = match && match[3] ? match[3].trim() : gptTextResponse;
+  const audioPrompt = match && match[3] ? match[3].trim() : gptTextResponse.slice(0,200);
 
   console.log("extracted", { response, imagePrompt, audioPrompt });
   return { response, imagePrompt, audioPrompt };
