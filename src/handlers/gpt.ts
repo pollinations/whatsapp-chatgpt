@@ -95,7 +95,7 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		if (getConfig("tts", "enabled")){ // && message.type !== "chat") {
 			sendVoiceMessageReply(message, response.text);
 			// message.reply(response.text);
-			return;
+			// return;
 		}
 
 		// Default: Text reply
@@ -153,7 +153,7 @@ async function sendVoiceMessageReply(message: Message, gptTextResponse: string) 
 	const { audioPrompt, imagePrompt, response } = extractPrompts(gptTextResponse)
 
 	const imagePromptSuffix = "in a futuristic forest, with a dystopian city melting in black and gold liquid, and black holograms of hybrid mythical creature"
-	if (Math.random() < 0.3)
+	if (Math.random() < 0.1)
 		handleMessageDALLE(message, imagePromptSuffix+". "+imagePrompt)
 
 	// Start generating audio and TTS request in parallel
